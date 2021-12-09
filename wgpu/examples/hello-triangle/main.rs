@@ -34,6 +34,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to create device");
 
+    device.on_uncaptured_error(|_| println!("An error occured but the program did not panic"));
     // Load the shaders from disk
     let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
@@ -76,6 +77,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     };
 
     surface.configure(&device, &config);
+    let mut force_invalid_scissor_rect = false;
 
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
@@ -117,6 +119,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         depth_stencil_attachment: None,
                     });
                     rpass.set_pipeline(&render_pipeline);
+                    if force_invalid_scissor_rect {
+                        rpass.set_scissor_rect(0, 0, config.width + 1, config.height + 1);
+                    }
                     rpass.draw(0..3, 0..1);
                 }
 
@@ -127,6 +132,22 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => *control_flow = ControlFlow::Exit,
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        input:
+                            winit::event::KeyboardInput {
+                                virtual_keycode: Some(winit::event::VirtualKeyCode::Return),
+                                state: winit::event::ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                force_invalid_scissor_rect ^= true;
+                window.request_redraw();
+            }
             _ => {}
         }
     });
